@@ -11,12 +11,12 @@ app = FastAPI()
 CLASSES = ['car', 'bus', 'truck', 'motorbike', 'bicycle']
 
 # Preload YOLO model on GPU
-model = YOLO("yolov8m.pt", device="cuda")
+model = YOLO("yolov8m.pt", device="cpu")
 
 
 @app.post("/detection_images")
 async def detect_images():
-    """
+    """                                                     
     Run YOLO detection asynchronously .
     """
     folder_path = Path(r"C:\Users\a.alsubhi\Desktop\Images")
@@ -102,10 +102,7 @@ async def detect_images():
 
 
 @app.get("/help")
-async def help():
-    """
-    API usage guide.
-    """
+ async def help():
     return {
         "message": "YOLO Object Detection API",
         "endpoints": {"/detection_images": "Run detection on images in the specified folder.",

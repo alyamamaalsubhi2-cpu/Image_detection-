@@ -102,10 +102,11 @@ async def detect_images():
 
 
 @app.get("/help")
- async def help():
+async def get_help():
     return {
         "message": "YOLO Object Detection API",
-        "endpoints": {"/detection_images": "Run detection on images in the specified folder.",
+        "endpoints": {
+            "/detection_images": "Run detection on images in the specified folder.",
             "/help": "Show this help message.",
         },
     }

@@ -8,84 +8,77 @@ from pathlib import Path
 app = FastAPI()
 
 # Define classes
-CLASSES = ['car', 'bus', 'truck', 'motorbike', 'bicycle']
+CLASSES = ['car', 'bus', 'person', 'motorbike', 'bicycle']
 
-# Preload YOLO model on GPU
-model = YOLO("yolov8m.pt", device="cpu")
+# Load YOLO model (adjust device if needed)
+model = YOLO("yolov8n.py")
 
+RESULTS_DIR = Path("/app/images")
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Use pathlib everywhere (no os)
+folder_path = RESULTS_DIR
+allowed_ext = {'.jpg', '.jpeg', '.png'}
 
 @app.post("/detection_images")
 async def detect_images():
-    """                                                     
-    Run YOLO detection asynchronously .
-    """
-    folder_path = Path(r"C:\Users\a.alsubhi\Desktop\Images")
-    allowed_ext = {".jpg", ".jpeg", ".png", ".bmp"}
-
-    # Check if folder exists
-    if not folder_path.exists():
+    
+    if not folder_path.exists() or not folder_path.is_dir():
         raise HTTPException(status_code=400, detail=f"Folder not found: {folder_path}")
-
-    # Find all image files step by step
+   
     image_files = []
-    for file in folder_path.iterdir():  # Go through each file in the folder
-        if file.suffix.lower() in allowed_ext:  # Check if it is an allowed image
+    for file in folder_path.iterdir():
+        if file.is_file() and file.suffix.lower() in allowed_ext:
             image_files.append(file)
-
-    if len(image_files) == 0:  # No valid images found
+    if not image_files:
         raise HTTPException(status_code=404, detail=f"No images found in {folder_path}")
 
     all_detections = []
     processed = 0
 
-    # Process each image asynchronously
+
     for image_file in image_files:
         image = cv2.imread(str(image_file))
         if image is None:
-            print(f"Warning: Could not read image {image_file.name}")
+            print(f"Could not read image {image_file.name}")
             continue
 
         try:
+            # Run prediction asynchronously
             results = await asyncio.to_thread(model.predict, image)
         except Exception as e:
             print(f"Error processing {image_file.name}: {e}")
             continue
 
-        # Extract detection boxes
+        # Process results
         for result in results:
             for box in result.boxes:
                 try:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    xy = box.xyxy[0]
+                    x1, y1, x2, y2 = map(int, xy)
                     width = x2 - x1
                     height = y2 - y1
                     confidence = float(box.conf[0])
-                    class_id = int(box.cls[0])
+                    class_id = int(box.cls[0]) 
                     class_name = CLASSES[class_id] if 0 <= class_id < len(CLASSES) else f"class_{class_id}"
 
-                    # Draw rectangle and label on the image
+                    # Draw bounding box and label
                     cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(
-                        image,
-                        f"{class_name} {confidence:.2f}",
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        (0, 255, 0),
-                        2
-                    )
+                    cv2.putText(image, f"{class_name} {confidence:.2f}", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.2, (0, 255, 0), 2)
 
-                    # Save detection info for CSV
                     all_detections.append([image_file.name, x1, y1, width, height, class_name, confidence])
+
                 except Exception as e:
-                    print(f"Bounding box error for {image_file.name}: {e}")
+                    print(f"Bounding box parse error for {image_file.name}: {e}")
                     continue
 
-        # Save annotated image
+        # Save annotated image next to inputs
         save_path = folder_path / f"annotated_{image_file.name}"
         cv2.imwrite(str(save_path), image)
         processed += 1
 
-    # Write all detections to CSV
+    # Write CSV using pathlib path
     csv_path = folder_path / "detections.csv"
     try:
         with open(csv_path, "w", newline="") as f:
